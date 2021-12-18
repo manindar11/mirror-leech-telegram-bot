@@ -2,12 +2,14 @@ import requests
 import itertools
 import time
 import html
+import threading
+import qbittorrentapi as qba
 
 from urllib.parse import quote
 from telegram import InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler
 
-from bot import dispatcher, LOGGER, SEARCH_API_LINK, get_client, SEARCH_PLUGINS
+from bot import dispatcher, LOGGER, SEARCH_API_LINK, SEARCH_PLUGINS
 from bot.helper.ext_utils.telegraph_helper import telegraph
 from bot.helper.telegram_helper.message_utils import editMessage, sendMessage, sendMarkup
 from bot.helper.telegram_helper.filters import CustomFilters
@@ -30,7 +32,10 @@ SITES = {
     "all": "All"
 }
 
-SEARCH_LIMIT = 300
+SEARCH_LIMIT = 200
+
+def srch_client() -> qba.SearchAPIMixIn:
+    return qba.Client(host="localhost", port=8090)
 
 def torser(update, context):
     user_id = update.message.from_user.id
@@ -79,7 +84,7 @@ def torserbut(update, context):
             editMessage(f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{SITES.get(site)}</i></b>", message)
         else:
             editMessage(f"<b>Searching for <i>{key}</i>\nTorrent Site:- <i>{site.capitalize()}</i></b>", message)
-        search(key, site, message, tool)
+        threading.Thread(target=search, args=(key, site, message, tool)).start()
     else:
         query.answer()
         editMessage("Search has been canceled!", message)
@@ -101,7 +106,7 @@ def search(key, site, message, tool):
         except Exception as e:
             editMessage(str(e), message)
     else:
-        client = get_client()
+        client = srch_client()
         search = client.search_start(pattern=str(key), plugins=str(site), category='all')
         search_id = search.id
         while True:
@@ -213,7 +218,7 @@ def api_buttons(user_id):
 def plugin_buttons(user_id):
     buttons = button_build.ButtonMaker()
     if not PLUGINS:
-        client = get_client()
+        client = srch_client()
         sites = client.search_plugins()
         for name in sites:
             PLUGINS.append(name['name'])
